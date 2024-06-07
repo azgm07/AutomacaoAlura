@@ -37,7 +37,7 @@ public sealed class WebDriverController : IDisposable
         }
         catch (Exception e) when (e is NoSuchElementException || e is WebDriverTimeoutException)
         {
-            _logger.LogWarning("Element locator ({locator}) was not found in current context page.", elementLocator);
+            _logger.LogWarning("Elemento ({locator}) não encontrado dentro do contexto da página.", elementLocator);
             return null;
         }
     }
@@ -51,7 +51,7 @@ public sealed class WebDriverController : IDisposable
         }
         catch (Exception e) when (e is NoSuchElementException || e is WebDriverTimeoutException)
         {
-            _logger.LogWarning("Element locator ({locator}) was not visible.", elementLocator);
+            _logger.LogWarning("Elemento ({locator}) não está visível.", elementLocator);
             return null;
         }
     }
@@ -65,7 +65,7 @@ public sealed class WebDriverController : IDisposable
         }
         catch (Exception e) when (e is NoSuchElementException || e is WebDriverTimeoutException)
         {
-            _logger.LogWarning("Element locator ({locator}) was not clickable.", elementLocator);
+            _logger.LogWarning("Elemento ({locator}) não é clicável.", elementLocator);
             return null;
         }
     }
@@ -85,20 +85,22 @@ public sealed class WebDriverController : IDisposable
             //Change options depending on the case
             if (isHeadless)
             {
-                options.AddArguments(new List<string>() {"headless"});
+                options.AddArguments(new List<string>() { "headless", "disable-gpu", "no-sandbox", "disable-extensions",
+                "disable-application-cache", "disable-notifications", "disable-infobars", "log-level=3", "mute-audio" });
 
                 driverService.HideCommandPromptWindow = true;
             }
             else
             {
-                options.AddArguments(new List<string>() {});
+                options.AddArguments(new List<string>() { /*"headless",*/ "disable-gpu", "no-sandbox", "disable-extensions",
+                "disable-application-cache", "disable-notifications", "disable-infobars", "log-level=3", "mute-audio" });
             }
 
             return new ChromeDriver(driverService, options);
         }
         catch (Exception e)
         {
-            _logger.LogWarning(e, "Could not create driver");
+            _logger.LogError(e, "Não foi possível criar o Webdriver");
             return null;
         }
     }
@@ -175,7 +177,7 @@ public sealed class WebDriverController : IDisposable
         }
         catch (Exception ex)
         {
-            _logger.LogWarning("Prepare scrapper page failed: {ex}", ex.Message);
+            _logger.LogError("Preparação da página falhou: {ex}", ex.Message);
             result = false;
         }
         return result;
@@ -222,7 +224,7 @@ public sealed class WebDriverController : IDisposable
         }
         catch (Exception ex)
         {
-            _logger.LogWarning("Course data was not captured: {ex}", ex.Message);
+            _logger.LogError("Dados não foram capturados: {ex}", ex.Message);
             return null;
         }
     }

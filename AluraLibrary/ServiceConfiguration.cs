@@ -16,7 +16,7 @@ public static class ServiceConfiguration
 
         services.Configure<HostOptions>(options =>
         {
-            options.ShutdownTimeout = TimeSpan.FromSeconds(10);
+            options.ShutdownTimeout = TimeSpan.FromSeconds(1);
         });
     }
 

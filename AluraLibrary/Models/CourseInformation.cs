@@ -8,16 +8,16 @@ namespace AluraLibrary.Models;
 
 public class CourseInformation
 {
-    public string Title { get; set; }
-    public string Instructors { get; set; }
-    public string Hours { get; set; }
-    public string Description { get; set; }
+    public string Titulo { get; set; }
+    public string Instrutores { get; set; }
+    public string CargaHoraria { get; set; }
+    public string Descricao { get; set; }
 
-    public CourseInformation(string title = "", string instructors = "", string hours = "", string description = "")
+    public CourseInformation(string titulo = "", string instrutores = "", string cargaHoraria = "", string descricao = "")
     {
-        Title = title;
-        Instructors = instructors;
-        Hours = hours;
-        Description = description;
+        Titulo = titulo;
+        Instrutores = instrutores;
+        CargaHoraria = cargaHoraria;
+        Descricao = descricao;
     }
 }
