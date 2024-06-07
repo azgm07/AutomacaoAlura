@@ -4,20 +4,23 @@ using OpenQA.Selenium.Support.UI;
 using OpenQA.Selenium;
 using SeleniumExtras.WaitHelpers;
 using AluraLibrary.Models;
-using System.Threading.Channels;
-using System.Text;
+using AluraLibrary.Utils;
+using AluraLibrary.Interfaces;
+using Newtonsoft.Json;
 
 namespace AluraLibrary.Controllers;
 
 public sealed class WebDriverController : IDisposable
 {
+    private readonly IDataService _dataService;
     private readonly ILogger _logger;
     private readonly string _url;
 
-    public WebDriverController(ILogger logger)
+    public WebDriverController(ILogger logger, IDataService dataService)
     {
         _url = "https://www.alura.com.br/busca";
         _logger = logger;
+        _dataService = dataService;
     }
 
     public void Dispose()
@@ -105,28 +108,25 @@ public sealed class WebDriverController : IDisposable
         CourseInformation? response = null;
         try
         {
-            using (WebDriver? driver = CreateDriver())
+            using WebDriver? driver = CreateDriver();
+            if (driver != null)
             {
-                if (driver != null)
+                if (OpenPage(driver) && PreparePage(driver, searchText))
                 {
-                    if (OpenPage(driver) && PreparePage(driver, searchText))
-                    {
-                        Task<CourseInformation?> taskGetCourses = Task.Run(() => ReadFirstCourse(driver), token);
+                    Task<CourseInformation?> taskGetCourses = Task.Run(() => ReadFirstCourse(driver), token);
 
-                        response = await taskGetCourses;
+                    response = await taskGetCourses;
                         
 
-                        if (response != null)
-                        {
-                            _logger.LogWarning(response.ToString());
-                            //FlushData(CurrentEnvironment, Channel, currentGame, viewers.Value.ToString());
-                            //response.CurrentGame = currentGame;
-                            //response.CurrentViewers = viewers.Value;
-                            //LastResponse = response;
-                        }
+                    if (response != null)
+                    {
+                        string json = JsonConvert.SerializeObject(response, Formatting.Indented);
+                        _logger.LogDebug("Dados coletados: \n{json}", json);
+                        FlushData(searchText, response, true);
                     }
                 }
             }
+            
         }
         catch (Exception)
         {
@@ -175,7 +175,7 @@ public sealed class WebDriverController : IDisposable
         }
         catch (Exception ex)
         {
-            _logger.LogWarning($"Prepare scrapper page failed: {ex.Message}");
+            _logger.LogWarning("Prepare scrapper page failed: {ex}", ex.Message);
             result = false;
         }
         return result;
@@ -222,35 +222,14 @@ public sealed class WebDriverController : IDisposable
         }
         catch (Exception ex)
         {
-            _logger.LogWarning($"Course data was not captured: {ex}");
+            _logger.LogWarning("Course data was not captured: {ex}", ex.Message);
             return null;
         }
     }
 
-    //private void FlushData(StreamEnvironment environment, string channel, string currentGame, string counter)
-    //{
-    //    string result = string.Concat(DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss"), ",", currentGame, ",", counter);
-    //    List<string> newList = new()
-    //        {
-    //            result
-    //        };
-    //    WriteData(newList, environment.Website, channel, "counters");
-
-    //    CreateInfoLog(environment, channel, currentGame, counter);
-    //}
-
-    //private void WriteData(List<string> lines, string website, string livestream, string type, bool startNew = false)
-    //{
-    //    string file = $"{ServiceUtils.RemoveSpecial(website.ToLower())}-{ServiceUtils.RemoveSpecial(livestream.ToLower())}-{type}.csv";
-    //    //_fileService.WriteFile("files/csv", file, lines, startNew);
-    //}
-    //private void CreateInfoLog(StreamEnvironment environment, string channel, string currentGame, string viewers)
-    //{
-    //    StringBuilder sb = new();
-    //    sb.Append($"Stream: {environment.Website}/{channel} | ");
-    //    sb.Append($"Playing: {currentGame} | ");
-    //    sb.Append($"Viewers Count: {viewers}");
-
-    //    _logger.LogInformation("{message}", sb.ToString());
-    //}
+    private void FlushData(string search, object data, bool startNew = false)
+    {
+        string file = $"{DataUtils.RemoveSpecial(search).ToLower()}.json";
+        _dataService.WriteData("files/json", file, data, startNew);
+    }
 }

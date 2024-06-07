@@ -12,6 +12,7 @@ public static class ServiceConfiguration
     {
         services.AddHostedService<HostService>();
         services.AddSingleton<IWebDriverService, WebDriverService>();
+        services.AddSingleton<IDataService, DataService>();
 
         services.Configure<HostOptions>(options =>
         {
