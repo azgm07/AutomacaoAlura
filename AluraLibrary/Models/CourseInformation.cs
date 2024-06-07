@@ -13,11 +13,11 @@ public class CourseInformation
     public string Hours { get; set; }
     public string Description { get; set; }
 
-    public CourseInformation()
+    public CourseInformation(string title = "", string instructors = "", string hours = "", string description = "")
     {
-        Title = "";
-        Instructors = "";
-        Hours = "";
-        Description = "";
+        Title = title;
+        Instructors = instructors;
+        Hours = hours;
+        Description = description;
     }
 }

@@ -32,7 +32,7 @@ public sealed class WebDriverController : IDisposable
             var wait = new WebDriverWait(driver, TimeSpan.FromSeconds(timeout));
             return (WebElement)wait.Until(ExpectedConditions.ElementExists(elementLocator));
         }
-        catch (NoSuchElementException)
+        catch (Exception e) when (e is NoSuchElementException || e is WebDriverTimeoutException)
         {
             _logger.LogWarning("Element locator ({locator}) was not found in current context page.", elementLocator);
             return null;
@@ -46,7 +46,7 @@ public sealed class WebDriverController : IDisposable
             var wait = new WebDriverWait(driver, TimeSpan.FromSeconds(timeout));
             return (WebElement)wait.Until(ExpectedConditions.ElementIsVisible(elementLocator));
         }
-        catch (NoSuchElementException)
+        catch (Exception e) when (e is NoSuchElementException || e is WebDriverTimeoutException)
         {
             _logger.LogWarning("Element locator ({locator}) was not visible.", elementLocator);
             return null;
@@ -60,14 +60,14 @@ public sealed class WebDriverController : IDisposable
             var wait = new WebDriverWait(driver, TimeSpan.FromSeconds(timeout));
             return (WebElement)wait.Until(ExpectedConditions.ElementToBeClickable(elementLocator));
         }
-        catch (NoSuchElementException)
+        catch (Exception e) when (e is NoSuchElementException || e is WebDriverTimeoutException)
         {
             _logger.LogWarning("Element locator ({locator}) was not clickable.", elementLocator);
             return null;
         }
     }
 
-    public WebDriver? CreateDriver(bool isHeadless = true)
+    public WebDriver? CreateDriver(bool isHeadless = false)
     {
         try
         {
@@ -111,16 +111,14 @@ public sealed class WebDriverController : IDisposable
                 {
                     if (OpenPage(driver) && PreparePage(driver, searchText))
                     {
-                        string? data = null;
+                        Task<CourseInformation?> taskGetCourses = Task.Run(() => ReadFirstCourse(driver), token);
 
-                        Task<string?> taskGetCourses = Task.Run(() => ReadFirstCourse(driver), token);
-
-                        data = await taskGetCourses;
+                        response = await taskGetCourses;
                         
 
-                        if (!string.IsNullOrEmpty(data))
+                        if (response != null)
                         {
-                            response = new();
+                            _logger.LogWarning(response.ToString());
                             //FlushData(CurrentEnvironment, Channel, currentGame, viewers.Value.ToString());
                             //response.CurrentGame = currentGame;
                             //response.CurrentViewers = viewers.Value;
@@ -159,7 +157,7 @@ public sealed class WebDriverController : IDisposable
             if (driver != null)
             {
                 By selectorSearch = By.CssSelector("#busca-form-input");
-                By selectorSubmit = By.CssSelector("button[type='submit']");
+                By selectorSubmit = By.CssSelector("#busca-form > form > input.busca-form-botao.--desktop");
                 WebElement? webElementSubmit = WaitUntilElementClickable(driver, selectorSubmit);
 
                 if (webElementSubmit != null &&
@@ -175,19 +173,18 @@ public sealed class WebDriverController : IDisposable
                 }
             }
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            _logger.LogWarning("Prepare scrapper page failed.");
+            _logger.LogWarning($"Prepare scrapper page failed: {ex.Message}");
             result = false;
         }
         return result;
     }
 
-    private string? ReadFirstCourse(WebDriver driver)
+    private CourseInformation? ReadFirstCourse(WebDriver driver)
     {
         try
         {
-            string data = "";
             By selectorTitle = By.CssSelector("#busca-resultados > ul > li:nth-child(1) > a > div > h4");
             By selectorDescription = By.CssSelector("#busca-resultados > ul > li:nth-child(1) > a > div > p");
 
@@ -213,19 +210,19 @@ public sealed class WebDriverController : IDisposable
                     courseInstructorsList.Add(elementInstuctor.Text);
                     countInstructors += 2;
                     selectorInstructor = By.CssSelector($"#instrutores > div > ul > li:nth-child({countInstructors}) > div > h3");
-                    elementInstuctor = WaitUntilElementVisible(driver, selectorInstructor);
+                    elementInstuctor = WaitUntilElementVisible(driver, selectorInstructor, 2);
                 }
 
                 courseInstructors = string.Join(" . ", courseInstructorsList);
             }
 
-            data = $"{courseTitle},{courseDescription},{courseHours},{courseInstructors}";
+            CourseInformation data = new(courseTitle, courseInstructors, courseHours, courseDescription);
 
             return data;
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            _logger.LogWarning("Course data was not captured");
+            _logger.LogWarning($"Course data was not captured: {ex}");
             return null;
         }
     }
