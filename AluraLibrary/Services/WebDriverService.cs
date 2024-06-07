@@ -1,19 +1,24 @@
 ﻿using AluraLibrary.Controllers;
 using AluraLibrary.Interfaces;
+using Microsoft.Extensions.Logging;
 
 namespace AluraLibrary.Services;
 
 public class WebDriverService : IWebDriverService
 {
-    public WebDriverController WebDriverInstance => throw new NotImplementedException();
+    public WebDriverController WebDriverInstance { get; private set; }
 
-    public int RunTimeSeconds { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+    public CancellationToken CurrentToken { get; private set; }
 
-    public CancellationToken CurrentToken => throw new NotImplementedException();
+    public WebDriverService(ILogger<WebDriverService> logger)
+    {
+        WebDriverInstance = new(logger);
+        CurrentToken = new();
+    }
 
     public Task RunWebDriverAsync(string searchText, CancellationToken token)
     {
-        Console.WriteLine("Search Text: " + searchText);
-        return Task.Delay(1000, token);
+        CurrentToken = token;
+        return WebDriverInstance.GetInfoAsync(searchText, token);
     }
 }
