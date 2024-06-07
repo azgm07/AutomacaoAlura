@@ -10,8 +10,8 @@ public class HostService : BackgroundService
     private readonly IHostApplicationLifetime _hostApplicationLifetime;
     private readonly IWebDriverService _webDriver;
 
-    private const string SearchMenu = "Por favor escreva o termo que deseja buscar:\n";
-    private const string SearchError = "Search term input on console was null";
+    private const string SearchMenu = "Por favor escreva o termo que deseja buscar:";
+    private const string SearchError = "Texto capturado é nulo";
 
     public HostService(IHostApplicationLifetime hostApplicationLifetime, ILogger<HostService> logger, IWebDriverService webDriver)
     {

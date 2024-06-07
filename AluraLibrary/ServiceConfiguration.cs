@@ -12,10 +12,11 @@ public static class ServiceConfiguration
     {
         services.AddHostedService<HostService>();
         services.AddSingleton<IWebDriverService, WebDriverService>();
+        services.AddSingleton<IDataService, DataService>();
 
         services.Configure<HostOptions>(options =>
         {
-            options.ShutdownTimeout = TimeSpan.FromSeconds(10);
+            options.ShutdownTimeout = TimeSpan.FromSeconds(1);
         });
     }
 

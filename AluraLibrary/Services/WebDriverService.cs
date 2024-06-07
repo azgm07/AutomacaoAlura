@@ -10,9 +10,9 @@ public class WebDriverService : IWebDriverService
 
     public CancellationToken CurrentToken { get; private set; }
 
-    public WebDriverService(ILogger<WebDriverService> logger)
+    public WebDriverService(ILogger<WebDriverService> logger, IDataService dataService)
     {
-        WebDriverInstance = new(logger);
+        WebDriverInstance = new(logger, dataService);
         CurrentToken = new();
     }
 

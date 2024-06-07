@@ -4,20 +4,23 @@ using OpenQA.Selenium.Support.UI;
 using OpenQA.Selenium;
 using SeleniumExtras.WaitHelpers;
 using AluraLibrary.Models;
-using System.Threading.Channels;
-using System.Text;
+using AluraLibrary.Utils;
+using AluraLibrary.Interfaces;
+using Newtonsoft.Json;
 
 namespace AluraLibrary.Controllers;
 
 public sealed class WebDriverController : IDisposable
 {
+    private readonly IDataService _dataService;
     private readonly ILogger _logger;
     private readonly string _url;
 
-    public WebDriverController(ILogger logger)
+    public WebDriverController(ILogger logger, IDataService dataService)
     {
         _url = "https://www.alura.com.br/busca";
         _logger = logger;
+        _dataService = dataService;
     }
 
     public void Dispose()
@@ -32,9 +35,9 @@ public sealed class WebDriverController : IDisposable
             var wait = new WebDriverWait(driver, TimeSpan.FromSeconds(timeout));
             return (WebElement)wait.Until(ExpectedConditions.ElementExists(elementLocator));
         }
-        catch (NoSuchElementException)
+        catch (Exception e) when (e is NoSuchElementException || e is WebDriverTimeoutException)
         {
-            _logger.LogWarning("Element locator ({locator}) was not found in current context page.", elementLocator);
+            _logger.LogWarning("Elemento ({locator}) não encontrado dentro do contexto da página.", elementLocator);
             return null;
         }
     }
@@ -46,9 +49,9 @@ public sealed class WebDriverController : IDisposable
             var wait = new WebDriverWait(driver, TimeSpan.FromSeconds(timeout));
             return (WebElement)wait.Until(ExpectedConditions.ElementIsVisible(elementLocator));
         }
-        catch (NoSuchElementException)
+        catch (Exception e) when (e is NoSuchElementException || e is WebDriverTimeoutException)
         {
-            _logger.LogWarning("Element locator ({locator}) was not visible.", elementLocator);
+            _logger.LogWarning("Elemento ({locator}) não está visível.", elementLocator);
             return null;
         }
     }
@@ -60,14 +63,14 @@ public sealed class WebDriverController : IDisposable
             var wait = new WebDriverWait(driver, TimeSpan.FromSeconds(timeout));
             return (WebElement)wait.Until(ExpectedConditions.ElementToBeClickable(elementLocator));
         }
-        catch (NoSuchElementException)
+        catch (Exception e) when (e is NoSuchElementException || e is WebDriverTimeoutException)
         {
-            _logger.LogWarning("Element locator ({locator}) was not clickable.", elementLocator);
+            _logger.LogWarning("Elemento ({locator}) não é clicável.", elementLocator);
             return null;
         }
     }
 
-    public WebDriver? CreateDriver(bool isHeadless = true)
+    public WebDriver? CreateDriver(bool isHeadless = false)
     {
         try
         {
@@ -82,20 +85,22 @@ public sealed class WebDriverController : IDisposable
             //Change options depending on the case
             if (isHeadless)
             {
-                options.AddArguments(new List<string>() {"headless"});
+                options.AddArguments(new List<string>() { "headless", "disable-gpu", "no-sandbox", "disable-extensions",
+                "disable-application-cache", "disable-notifications", "disable-infobars", "log-level=3", "mute-audio" });
 
                 driverService.HideCommandPromptWindow = true;
             }
             else
             {
-                options.AddArguments(new List<string>() {});
+                options.AddArguments(new List<string>() { /*"headless",*/ "disable-gpu", "no-sandbox", "disable-extensions",
+                "disable-application-cache", "disable-notifications", "disable-infobars", "log-level=3", "mute-audio" });
             }
 
             return new ChromeDriver(driverService, options);
         }
         catch (Exception e)
         {
-            _logger.LogWarning(e, "Could not create driver");
+            _logger.LogError(e, "Não foi possível criar o Webdriver");
             return null;
         }
     }
@@ -105,30 +110,25 @@ public sealed class WebDriverController : IDisposable
         CourseInformation? response = null;
         try
         {
-            using (WebDriver? driver = CreateDriver())
+            using WebDriver? driver = CreateDriver();
+            if (driver != null)
             {
-                if (driver != null)
+                if (OpenPage(driver) && PreparePage(driver, searchText))
                 {
-                    if (OpenPage(driver) && PreparePage(driver, searchText))
-                    {
-                        string? data = null;
+                    Task<CourseInformation?> taskGetCourses = Task.Run(() => ReadFirstCourse(driver), token);
 
-                        Task<string?> taskGetCourses = Task.Run(() => ReadFirstCourse(driver), token);
-
-                        data = await taskGetCourses;
+                    response = await taskGetCourses;
                         
 
-                        if (!string.IsNullOrEmpty(data))
-                        {
-                            response = new();
-                            //FlushData(CurrentEnvironment, Channel, currentGame, viewers.Value.ToString());
-                            //response.CurrentGame = currentGame;
-                            //response.CurrentViewers = viewers.Value;
-                            //LastResponse = response;
-                        }
+                    if (response != null)
+                    {
+                        string json = JsonConvert.SerializeObject(response, Formatting.Indented);
+                        _logger.LogDebug("Dados coletados: \n{json}", json);
+                        FlushData(searchText, response, true);
                     }
                 }
             }
+            
         }
         catch (Exception)
         {
@@ -159,7 +159,7 @@ public sealed class WebDriverController : IDisposable
             if (driver != null)
             {
                 By selectorSearch = By.CssSelector("#busca-form-input");
-                By selectorSubmit = By.CssSelector("button[type='submit']");
+                By selectorSubmit = By.CssSelector("#busca-form > form > input.busca-form-botao.--desktop");
                 WebElement? webElementSubmit = WaitUntilElementClickable(driver, selectorSubmit);
 
                 if (webElementSubmit != null &&
@@ -175,19 +175,18 @@ public sealed class WebDriverController : IDisposable
                 }
             }
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            _logger.LogWarning("Prepare scrapper page failed.");
+            _logger.LogError("Preparação da página falhou: {ex}", ex.Message);
             result = false;
         }
         return result;
     }
 
-    private string? ReadFirstCourse(WebDriver driver)
+    private CourseInformation? ReadFirstCourse(WebDriver driver)
     {
         try
         {
-            string data = "";
             By selectorTitle = By.CssSelector("#busca-resultados > ul > li:nth-child(1) > a > div > h4");
             By selectorDescription = By.CssSelector("#busca-resultados > ul > li:nth-child(1) > a > div > p");
 
@@ -213,47 +212,26 @@ public sealed class WebDriverController : IDisposable
                     courseInstructorsList.Add(elementInstuctor.Text);
                     countInstructors += 2;
                     selectorInstructor = By.CssSelector($"#instrutores > div > ul > li:nth-child({countInstructors}) > div > h3");
-                    elementInstuctor = WaitUntilElementVisible(driver, selectorInstructor);
+                    elementInstuctor = WaitUntilElementVisible(driver, selectorInstructor, 2);
                 }
 
                 courseInstructors = string.Join(" . ", courseInstructorsList);
             }
 
-            data = $"{courseTitle},{courseDescription},{courseHours},{courseInstructors}";
+            CourseInformation data = new(courseTitle, courseInstructors, courseHours, courseDescription);
 
             return data;
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            _logger.LogWarning("Course data was not captured");
+            _logger.LogError("Dados não foram capturados: {ex}", ex.Message);
             return null;
         }
     }
 
-    //private void FlushData(StreamEnvironment environment, string channel, string currentGame, string counter)
-    //{
-    //    string result = string.Concat(DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss"), ",", currentGame, ",", counter);
-    //    List<string> newList = new()
-    //        {
-    //            result
-    //        };
-    //    WriteData(newList, environment.Website, channel, "counters");
-
-    //    CreateInfoLog(environment, channel, currentGame, counter);
-    //}
-
-    //private void WriteData(List<string> lines, string website, string livestream, string type, bool startNew = false)
-    //{
-    //    string file = $"{ServiceUtils.RemoveSpecial(website.ToLower())}-{ServiceUtils.RemoveSpecial(livestream.ToLower())}-{type}.csv";
-    //    //_fileService.WriteFile("files/csv", file, lines, startNew);
-    //}
-    //private void CreateInfoLog(StreamEnvironment environment, string channel, string currentGame, string viewers)
-    //{
-    //    StringBuilder sb = new();
-    //    sb.Append($"Stream: {environment.Website}/{channel} | ");
-    //    sb.Append($"Playing: {currentGame} | ");
-    //    sb.Append($"Viewers Count: {viewers}");
-
-    //    _logger.LogInformation("{message}", sb.ToString());
-    //}
+    private void FlushData(string search, object data, bool startNew = false)
+    {
+        string file = $"{DataUtils.RemoveSpecial(search).ToLower()}.json";
+        _dataService.WriteData("files/json", file, data, startNew);
+    }
 }
